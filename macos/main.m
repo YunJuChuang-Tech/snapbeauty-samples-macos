@@ -1,6 +1,7 @@
 #import <AppKit/AppKit.h>
 #import <AVFoundation/AVFoundation.h>
 #import <CoreVideo/CoreVideo.h>
+#import <ImageIO/ImageIO.h>
 #include "../examples/sample_license.h"
 #include <time.h>
 
@@ -34,14 +35,43 @@ static NSArray<NSDictionary *> *LoadMakeupStyles(NSString *assets) {
     return styles;
 }
 
+// Registers the CC BY-SA host filters shipped with this app (Assets/host-filters/luts/*.png, attribution in
+// Assets/host-filters/NOTICE.md). The 8-bit RGB PNGs are read without colour management and passed as opaque RGBA8.
+static BOOL RegisterHostFilters(xm_desktop_engine *engine, NSString *assets) {
+    NSString *folder = [assets stringByAppendingPathComponent:@"host-filters/luts"];
+    for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:folder error:nil]) {
+        if (![name.pathExtension isEqualToString:@"png"]) continue;
+        NSURL *url = [NSURL fileURLWithPath:[folder stringByAppendingPathComponent:name]];
+        CGImageSourceRef source = CGImageSourceCreateWithURL((__bridge CFURLRef)url, NULL);
+        CGImageRef image = source ? CGImageSourceCreateImageAtIndex(source, 0, NULL) : NULL;
+        if (source) CFRelease(source);
+        if (!image) return NO;
+        const size_t width = CGImageGetWidth(image), height = CGImageGetHeight(image);
+        const size_t bits = CGImageGetBitsPerPixel(image), stride = CGImageGetBytesPerRow(image);
+        BOOL ok = CGImageGetBitsPerComponent(image) == 8 && (bits == 24 || bits == 32);
+        if (ok) {
+            CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(image));
+            const uint8_t *pixels = CFDataGetBytePtr(data);
+            NSMutableData *rgba = [NSMutableData dataWithLength:width * height * 4];
+            uint8_t *out = rgba.mutableBytes;
+            for (size_t y = 0; y < height; ++y) for (size_t x = 0; x < width; ++x) {
+                const uint8_t *s = pixels + y * stride + x * (bits / 8); uint8_t *d = out + (y * width + x) * 4;
+                d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = 255;
+            }
+            CFRelease(data);
+            ok = xm_desktop_engine_register_filter(engine, name.stringByDeletingPathExtension.UTF8String, out,
+                                                   (int32_t)width, (int32_t)height) == XM_OK;
+            if (!ok) NSLog(@"SnapBeauty host filter %@: %s", name, xm_desktop_last_error(engine));
+        }
+        CGImageRelease(image);
+        if (!ok) return NO;
+    }
+    return YES;
+}
+
 static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
-    float values[XM_PARAM_COUNT] = {0};
-    /* Neutral start: zero-filling is not "no effect". These twelve bidirectional face controls are neutral at 0.5;
-     * 0 pushes each one to an extreme and visibly reshapes the face. Everything else is neutral at 0. */
-    values[XM_PARAM_SHAPE_CHIN_LENGTH] = values[XM_PARAM_SHAPE_FOREHEAD_HEIGHT] = values[XM_PARAM_SHAPE_MOUTH_SIZE] = 0.5f;
-    values[XM_PARAM_SHAPE_LIP_FULLNESS] = values[XM_PARAM_SHAPE_EYE_POSITION] = values[XM_PARAM_SHAPE_EYE_DISTANCE] = 0.5f;
-    values[XM_PARAM_SHAPE_EYE_TILT] = values[XM_PARAM_SHAPE_NOSE_LENGTH] = values[XM_PARAM_SHAPE_PHILTRUM_LENGTH] = 0.5f;
-    values[XM_PARAM_SHAPE_BROW_POSITION] = values[XM_PARAM_SHAPE_BROW_DISTANCE] = values[XM_PARAM_SHAPE_BROW_THICKNESS] = 0.5f;
+    float values[XM_PARAM_COUNT];
+    xm_params_neutral(values); // Neutral start: zero-filling would push the twelve bidirectional face controls (neutral 0.5) to one extreme.
     values[XM_PARAM_SMOOTHING] = 4.2f;
     values[XM_PARAM_BRIGHTENING] = 0.3f;
     float intensity = style ? 0.4f : 0.0f;
@@ -118,7 +148,8 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
         if (initialize_license(NULL, bundledLicense.fileSystemRepresentation)) {
             xm_desktop_options options = {sizeof(options), assets};
             if (xm_desktop_engine_create(&options, &self->_engine) == XM_OK) {
-                self->_engineReady = ApplyParameters(self->_engine, nil);
+                self->_engineReady = RegisterHostFilters(self->_engine, [NSString stringWithUTF8String:assets]) &&
+                    ApplyParameters(self->_engine, nil);
             } else {
                 NSLog(@"SnapBeauty engine: %s", xm_desktop_last_error(NULL));
             }

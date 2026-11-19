@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey.svg)](#环境要求)
 
-本仓库提供 SnapBeauty SDK 1.3.1 的 macOS 接入示例。两个入口都使用公开的 `snapbeauty/desktop.h` C 接口。
+本仓库提供 SnapBeauty SDK 1.3.2 的 macOS 接入示例。两个入口都使用公开的 `snapbeauty/desktop.h` C 接口。
 
 | 示例 | 内容 |
 | --- | --- |
@@ -20,21 +20,21 @@
 
 ### 1. 解压 SDK
 
-从 SnapBeauty 官方渠道获取 `SnapBeauty-macOS-1.3.1.zip`。下载入口开放前，可向 SnapBeauty SDK 提供方获取 ZIP。将文件放在 `~/Downloads/`，在仓库根目录执行以下命令。也可解压至任意目录，并通过构建的第一个参数或 `SNAPBEAUTY_SDK_ROOT` 指定包含 `include/`、`lib/`、`Assets/`、`Shaders/` 的目录。
+从 SnapBeauty 官方渠道获取 `SnapBeauty-macOS-1.3.2.zip`。下载入口开放前，可向 SnapBeauty SDK 提供方获取 ZIP。将文件放在 `~/Downloads/`，在仓库根目录执行以下命令。也可解压至任意目录，并通过构建的第一个参数或 `SNAPBEAUTY_SDK_ROOT` 指定包含 `include/`、`lib/`、`Assets/`、`Shaders/` 的目录。
 
 ```bash
 mkdir -p .local/sdk
-shasum -a 256 "$HOME/Downloads/SnapBeauty-macOS-1.3.1.zip"
-unzip "$HOME/Downloads/SnapBeauty-macOS-1.3.1.zip" -d .local/sdk
+shasum -a 256 "$HOME/Downloads/SnapBeauty-macOS-1.3.2.zip"
+unzip "$HOME/Downloads/SnapBeauty-macOS-1.3.2.zip" -d .local/sdk
 ```
 
-本示例对应的 ZIP SHA-256 为 `129ea862cc4837334f64ca6bec3135bcb1cc70960f0f3b42454e2dd2190adf61`。
+本示例对应 [SDK 1.3.2 ZIP](https://github.com/YunJuChuang-Tech/snapbeauty-macos-sdk/releases/download/1.3.2/SnapBeauty-macOS-1.3.2.zip)，SHA-256：`98ef78c6a787302f46e5264d3c053d5cf51c650c2220012351d7678fbf6ad680`。
 
 ### 2. 构建
 
 ```bash
 export SNAPBEAUTY_BUNDLE_ID=ai.snapbeauty.samples.macos
-bash macos/build.sh .local/sdk/SnapBeauty-macOS-1.3.1 build/macos
+bash macos/build.sh .local/sdk/SnapBeauty-macOS-1.3.2 build/macos
 ```
 
 输出 `build/macos/SnapBeautyCamera.app` 和 `build/macos/snapbeauty-minimal`。重复构建时指定新的输出目录。脚本把 SDK 动态库放入 `Contents/Frameworks`，用 `@executable_path/../Frameworks` 加载；`Assets/` 和 `Shaders/` 一起放入 `Contents/Resources`。默认使用本地 ad hoc 签名组装示例 App。
@@ -57,7 +57,7 @@ macOS 授权需与移动端分开签发。使用自有 Bundle ID 时，在构建
 
 ```bash
 SNAPBEAUTY_LICENSE_FILE="$PWD/macos/SampleLicense/snapbeauty.license" \
-  SNAPBEAUTY_ASSETS="$PWD/.local/sdk/SnapBeauty-macOS-1.3.1/Assets" build/macos/snapbeauty-minimal
+  SNAPBEAUTY_ASSETS="$PWD/.local/sdk/SnapBeauty-macOS-1.3.2/Assets" build/macos/snapbeauty-minimal
 ```
 
 `xm_desktop_init` 的状态 JSON 中 `code=0` 表示授权有效，`code=2` 表示缺少授权。没有有效授权时，SDK 返回原帧。相机程序使用单调时钟，给 SDK 提供采集缓冲区的实际步幅，并在销毁引擎前停止采集。
@@ -65,3 +65,11 @@ SNAPBEAUTY_LICENSE_FILE="$PWD/macos/SampleLicense/snapbeauty.license" \
 ## 许可
 
 查看 [Apache 2.0 许可证](LICENSE)和[第三方声明](THIRD_PARTY_NOTICES.md)。
+
+## 滤镜 LUT
+
+`assets/host-filters/luts/` 中的 10 张滤镜（`bright3`、`rose3`、`stylized11`、`mono1`、`warm1`、`warm2`、`fresh1`、`muted5`、`natural2`、`natural4`）不属于 SnapBeauty SDK，由本示例随 App 一起打包，在创建引擎后用 SDK 的 `registerFilter` 注册，之后和 SDK 内置滤镜一样用 `setFilter` 选择。
+
+- 素材来源：RawTherapee Film Simulation Collection 2015-09-20（https://rawtherapee.com/shared/HaldCLUT.zip ），作者 **Pat David、Pavlov Dmitry、Michael Ezra**。
+- 改动：重采样为 64³，用强度、提亮、冷暖、色调、饱和度、对比度六个全局参数调整，再三线性采样为 16³ 并量化为 RGB8（256×16）。
+- 基于本示例发布 App 时，如保留这些滤镜，须一并保留上述署名与许可文件；不需要时删除该目录即可，其余功能不受影响。

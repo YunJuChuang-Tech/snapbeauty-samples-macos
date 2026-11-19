@@ -21,7 +21,7 @@ mkdir -p "$app/Contents/"{MacOS,Frameworks,Resources}
 xcrun clang -arch arm64 -mmacosx-version-min=12.0 -O2 -Wall -Wextra -fobjc-arc \
     -I"$sdk/include" "$root/macos/main.m" -L"$sdk/lib" -lSnapBeauty \
     -Wl,-rpath,@executable_path/../Frameworks \
-    -framework AppKit -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreGraphics \
+    -framework AppKit -framework AVFoundation -framework CoreMedia -framework CoreVideo -framework CoreGraphics -framework ImageIO \
     -o "$app/Contents/MacOS/SnapBeautyCamera"
 xcrun clang -arch arm64 -mmacosx-version-min=12.0 -std=c11 -O2 -Wall -Wextra \
     -I"$sdk/include" "$root/examples/minimal.c" -L"$sdk/lib" -lSnapBeauty \
@@ -33,6 +33,8 @@ ditto "$sdk/Assets" "$app/Contents/Resources/Assets"
 ditto "$sdk/Shaders" "$app/Contents/Resources/Shaders"
 ditto "$root/assets/makeup" "$app/Contents/Resources/Assets/makeup"
 ditto "$root/assets/sample_makeup" "$app/Contents/Resources/Assets/sample_makeup"
+# CC BY-SA host filters, registered at startup; NOTICE.md and the licence text travel with them.
+ditto "$root/assets/host-filters" "$app/Contents/Resources/Assets/host-filters"
 if [[ "$bundle_id" == "ai.snapbeauty.samples.macos" && -f "$root/macos/SampleLicense/snapbeauty.license" ]]; then
     cp "$root/macos/SampleLicense/snapbeauty.license" "$app/Contents/Resources/snapbeauty.license"
 fi
