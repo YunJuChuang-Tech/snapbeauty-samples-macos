@@ -72,9 +72,9 @@ static BOOL RegisterHostFilters(xm_desktop_engine *engine, NSString *assets) {
 static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
     float values[XM_PARAM_COUNT];
     xm_params_neutral(values); // Neutral start: zero-filling would push the twelve bidirectional face controls (neutral 0.5) to one extreme.
-    values[XM_PARAM_SMOOTHING] = 4.2f;
-    values[XM_PARAM_BRIGHTENING] = 0.3f;
-    float intensity = style ? 0.4f : 0.0f;
+    values[XM_PARAM_SMOOTHING] = 3.6f;
+    values[XM_PARAM_BRIGHTENING] = 0.5f;
+    float intensity = style ? 0.6f : 0.0f;
     values[XM_PARAM_MAKEUP_INTENSITY] = intensity;
     values[XM_PARAM_FILTER_INTENSITY] = intensity;
     xm_params params = {sizeof(params), values, XM_PARAM_COUNT,
@@ -156,12 +156,18 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
         }
         NSArray<NSDictionary *> *styles = self->_engineReady ?
             LoadMakeupStyles([NSString stringWithUTF8String:assets]) : @[];
+        NSDictionary *dawn = nil;
+        for (NSDictionary *style in styles) {
+            if ([style[@"key"] isEqualToString:@"dawn"]) { dawn = style; break; }
+        }
+        if (dawn) self->_engineReady = ApplyParameters(self->_engine, dawn);
         dispatch_async(dispatch_get_main_queue(), ^{
             for (NSDictionary *style in styles) {
                 [self->_makeupPicker addItemWithTitle:style[@"name"]];
                 self->_makeupPicker.itemArray.lastObject.representedObject = style;
             }
             self->_makeupPicker.enabled = styles.count > 0;
+            if (dawn) [self->_makeupPicker selectItemWithTitle:dawn[@"name"]];
             [self requestCamera];
         });
     });
