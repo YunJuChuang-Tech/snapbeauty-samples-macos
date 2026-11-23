@@ -69,7 +69,9 @@ static BOOL RegisterHostFilters(xm_desktop_engine *engine, NSString *assets) {
     return YES;
 }
 
-static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
+static const float lipColors[6][4] = {{0,0,0,0}, {.611f,.352f,.352f,.500f}, {.752f,.267f,.231f,.543f},
+    {.713f,.374f,.409f,.517f}, {.786f,.326f,.252f,.629f}, {.476f,.018f,.025f,.777f}};
+static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style, NSInteger lipstick, float strength) {
     float values[XM_PARAM_COUNT];
     xm_params_neutral(values); // Neutral start: zero-filling would push the twelve bidirectional face controls (neutral 0.5) to one extreme.
     values[XM_PARAM_SMOOTHING] = 3.6f;
@@ -77,6 +79,9 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
     float intensity = style ? 0.6f : 0.0f;
     values[XM_PARAM_MAKEUP_INTENSITY] = intensity;
     values[XM_PARAM_FILTER_INTENSITY] = intensity;
+    values[XM_PARAM_LIPSTICK_R] = lipColors[lipstick][0]; values[XM_PARAM_LIPSTICK_G] = lipColors[lipstick][1];
+    values[XM_PARAM_LIPSTICK_B] = lipColors[lipstick][2]; values[XM_PARAM_LIPSTICK_A] = lipColors[lipstick][3];
+    values[XM_PARAM_LIPSTICK_STRENGTH] = lipstick ? strength : 0;
     xm_params params = {sizeof(params), values, XM_PARAM_COUNT,
                        [style[@"key"] UTF8String], [style[@"filter"] UTF8String]};
     if (xm_desktop_engine_set_params(engine, &params) == XM_OK) return YES;
@@ -92,6 +97,9 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
     NSImageView *_preview;
     NSTextField *_status;
     NSPopUpButton *_makeupPicker;
+    NSPopUpButton *_lipPicker;
+    NSSlider *_lipSlider;
+    float _lipLevels[6];
     AVCaptureSession *_session;
     dispatch_queue_t _captureQueue;
     dispatch_semaphore_t _presentationSlot;
@@ -120,7 +128,14 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
     _makeupPicker.target = self;
     _makeupPicker.action = @selector(selectMakeup:);
     _makeupPicker.enabled = NO;
-    for (NSView *view in @[_preview, _status, _makeupPicker]) {
+    for (int i = 0; i < 6; ++i) _lipLevels[i] = 0.6f;
+    _lipPicker = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
+    [_lipPicker addItemsWithTitles:@[@"无口红", @"珊瑚色", @"西柚色", @"豆沙粉", @"元气橘", @"复古红"]];
+    _lipPicker.target = self; _lipPicker.action = @selector(selectLipstick:); _lipPicker.accessibilityLabel = @"口红";
+    _lipPicker.enabled = NO;
+    _lipSlider = [NSSlider sliderWithValue:0.6 minValue:0 maxValue:1 target:self action:@selector(changeLipstick:)];
+    _lipSlider.accessibilityLabel = @"口红强度"; _lipSlider.enabled = NO;
+    for (NSView *view in @[_preview, _status, _makeupPicker, _lipPicker, _lipSlider]) {
         view.translatesAutoresizingMaskIntoConstraints = NO;
         [_window.contentView addSubview:view];
     }
@@ -132,7 +147,12 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
         [_preview.bottomAnchor constraintEqualToAnchor:_status.topAnchor constant:-8],
         [_status.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:12],
         [_status.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-12],
-        [_status.trailingAnchor constraintLessThanOrEqualToAnchor:_makeupPicker.leadingAnchor constant:-12],
+        [_status.trailingAnchor constraintLessThanOrEqualToAnchor:_makeupPicker.leadingAnchor constant:-8],
+        [_lipPicker.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-12],
+        [_lipPicker.bottomAnchor constraintEqualToAnchor:_makeupPicker.topAnchor constant:-4],
+        [_lipSlider.trailingAnchor constraintEqualToAnchor:_lipPicker.leadingAnchor constant:-8],
+        [_lipSlider.centerYAnchor constraintEqualToAnchor:_lipPicker.centerYAnchor],
+        [_lipSlider.widthAnchor constraintEqualToConstant:120],
         [_makeupPicker.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-12],
         [_makeupPicker.centerYAnchor constraintEqualToAnchor:_status.centerYAnchor]
     ]];
@@ -149,7 +169,7 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
             xm_desktop_options options = {sizeof(options), assets};
             if (xm_desktop_engine_create(&options, &self->_engine) == XM_OK) {
                 self->_engineReady = RegisterHostFilters(self->_engine, [NSString stringWithUTF8String:assets]) &&
-                    ApplyParameters(self->_engine, nil);
+                    ApplyParameters(self->_engine, nil, 0, 0);
             } else {
                 NSLog(@"SnapBeauty engine: %s", xm_desktop_last_error(NULL));
             }
@@ -160,13 +180,14 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
         for (NSDictionary *style in styles) {
             if ([style[@"key"] isEqualToString:@"dawn"]) { dawn = style; break; }
         }
-        if (dawn) self->_engineReady = ApplyParameters(self->_engine, dawn);
+        if (dawn) self->_engineReady = ApplyParameters(self->_engine, dawn, 0, 0);
         dispatch_async(dispatch_get_main_queue(), ^{
             for (NSDictionary *style in styles) {
                 [self->_makeupPicker addItemWithTitle:style[@"name"]];
                 self->_makeupPicker.itemArray.lastObject.representedObject = style;
             }
             self->_makeupPicker.enabled = styles.count > 0;
+            self->_lipPicker.enabled = self->_engineReady;
             if (dawn) [self->_makeupPicker selectItemWithTitle:dawn[@"name"]];
             [self requestCamera];
         });
@@ -175,9 +196,19 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style) {
 
 - (void)selectMakeup:(NSPopUpButton *)sender {
     NSDictionary *style = sender.selectedItem.representedObject;
-    dispatch_async(_captureQueue, ^{
-        self->_engineReady = ApplyParameters(self->_engine, style);
-    });
+    NSInteger lip = _lipPicker.indexOfSelectedItem; float strength = _lipLevels[lip];
+    dispatch_async(_captureQueue, ^{ self->_engineReady = ApplyParameters(self->_engine, style, lip, strength); });
+}
+
+- (void)selectLipstick:(NSPopUpButton *)sender {
+    NSInteger lip = sender.indexOfSelectedItem;
+    _lipSlider.enabled = lip > 0; _lipSlider.floatValue = _lipLevels[lip];
+    [self selectMakeup:_makeupPicker];
+}
+
+- (void)changeLipstick:(NSSlider *)sender {
+    _lipLevels[_lipPicker.indexOfSelectedItem] = sender.floatValue;
+    [self selectMakeup:_makeupPicker];
 }
 
 - (void)requestCamera {
