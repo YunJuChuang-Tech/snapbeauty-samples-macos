@@ -28,7 +28,7 @@ shasum -a 256 "$HOME/Downloads/SnapBeauty-macOS-1.3.6.zip"
 unzip "$HOME/Downloads/SnapBeauty-macOS-1.3.6.zip" -d .local/sdk
 ```
 
-本示例对应 [SDK 1.3.6 ZIP](https://github.com/YunJuChuang-Tech/snapbeauty-macos-sdk/releases/download/1.3.6/SnapBeauty-macOS-1.3.6.zip)，SHA-256：`b78256a819246ecf2d52008a84d4ffa9743fb862e11bf501d3cbd15c6e9f1059`。
+本示例对应 [SDK 1.3.6 ZIP](https://github.com/YunJuChuang-Tech/snapbeauty-macos-sdk/releases/download/1.3.6/SnapBeauty-macOS-1.3.6.zip)，SHA-256：`4654855179f6398c23663ce55bfcd429f6ba83c90142ec196a80cd64df7f2bef`。
 
 ### 2. 构建
 
