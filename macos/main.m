@@ -71,11 +71,42 @@ static BOOL RegisterHostFilters(xm_desktop_engine *engine, NSString *assets) {
 
 static const float lipColors[6][4] = {{0,0,0,0}, {.611f,.352f,.352f,.500f}, {.752f,.267f,.231f,.543f},
     {.713f,.374f,.409f,.517f}, {.786f,.326f,.252f,.629f}, {.476f,.018f,.025f,.777f}};
-static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style, NSInteger lipstick, float strength) {
+static BOOL ApplyParameters(xm_desktop_engine *engine, BOOL malePreset, NSDictionary *style, NSInteger lipstick, float strength) {
     float values[XM_PARAM_COUNT];
     xm_params_neutral(values); // Neutral start: zero-filling would push the twelve bidirectional face controls (neutral 0.5) to one extreme.
-    values[XM_PARAM_SMOOTHING] = 3.6f;
-    values[XM_PARAM_BRIGHTENING] = 0.5f;
+    if (malePreset) {
+        values[XM_PARAM_SMOOTHING] = 3.9f;
+        values[XM_PARAM_BRIGHTENING] = 0.38f;
+        values[XM_PARAM_ROSINESS] = 0.12f;
+        values[XM_PARAM_SHAPE_FACE_SLIMMING] = 0.24f;
+        values[XM_PARAM_SHAPE_FACE_V_TAPER] = 0.16f;
+        values[XM_PARAM_SHAPE_FACE_SHRINKING] = 0.15f;
+        values[XM_PARAM_SHAPE_EYE_SCALE] = 0.18f;
+        values[XM_PARAM_SHAPE_NOSE_WIDTH] = 0.14f;
+        values[XM_PARAM_SKIN_SHARPNESS] = 0.22f;
+        values[XM_PARAM_SKIN_TEXTURE] = 0.06f;
+        values[XM_PARAM_SKIN_BLEMISH_REMOVAL] = 0.48f;
+        values[XM_PARAM_SKIN_EYE_BRIGHTENING] = 0.28f;
+        values[XM_PARAM_SKIN_UNDEREYE_BAGS] = 0.55f;
+        values[XM_PARAM_SKIN_SMILE_LINES] = 0.35f;
+        values[XM_PARAM_SKIN_FACE_CONTOUR] = 0.18f;
+#if XM_PARAM_COUNT >= 46
+        values[XM_PARAM_SKIN_AEGYO_SAL] = 0.25f;
+#endif
+    } else {
+        values[XM_PARAM_SMOOTHING] = 3.6f;
+        values[XM_PARAM_BRIGHTENING] = 0.48f;
+        values[XM_PARAM_ROSINESS] = 0.10f;
+        values[XM_PARAM_SKIN_TEXTURE] = 0.12f;
+        values[XM_PARAM_SKIN_BLEMISH_REMOVAL] = 0.38f;
+        values[XM_PARAM_SKIN_EYE_BRIGHTENING] = 0.28f;
+        values[XM_PARAM_SKIN_UNDEREYE_BAGS] = 0.45f;
+        values[XM_PARAM_SKIN_SMILE_LINES] = 0.35f;
+        values[XM_PARAM_SKIN_FACE_CONTOUR] = 0.28f;
+#if XM_PARAM_COUNT >= 46
+        values[XM_PARAM_SKIN_AEGYO_SAL] = 0.58f;
+#endif
+    }
     float intensity = style ? 0.6f : 0.0f;
     values[XM_PARAM_MAKEUP_INTENSITY] = intensity;
     values[XM_PARAM_FILTER_INTENSITY] = intensity;
@@ -96,10 +127,18 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style, NSIn
     NSWindow *_window;
     NSImageView *_preview;
     NSTextField *_status;
+    NSSegmentedControl *_genderSwitch;
+    NSVisualEffectView *_bottomBar;
+    NSButton *_toggleBarBtn;
+    NSButton *_compareBtn;
     NSPopUpButton *_makeupPicker;
     NSPopUpButton *_lipPicker;
     NSSlider *_lipSlider;
+    NSDictionary *_dawnStyle;
     float _lipLevels[6];
+    BOOL _malePreset;
+    BOOL _barCollapsed;
+    BOOL _showOriginal;
     AVCaptureSession *_session;
     dispatch_queue_t _captureQueue;
     dispatch_semaphore_t _presentationSlot;
@@ -111,50 +150,112 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style, NSIn
     (void)notification;
     _captureQueue = dispatch_queue_create("ai.snapbeauty.samples.camera", DISPATCH_QUEUE_SERIAL);
     _presentationSlot = dispatch_semaphore_create(1);
-    _window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 800, 500)
+    _window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 820, 520)
                                           styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
                                                     NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable
                                             backing:NSBackingStoreBuffered defer:NO];
     _window.title = @"SnapBeauty macOS Samples";
-    _window.minSize = NSMakeSize(420, 260);
+    _window.minSize = NSMakeSize(480, 300);
     _window.releasedWhenClosed = NO;
+
+    NSView *content = _window.contentView;
+    content.wantsLayer = YES;
+    content.layer.backgroundColor = [NSColor colorWithRed:0.063 green:0.075 blue:0.067 alpha:1.0].CGColor;
 
     _preview = [[NSImageView alloc] init];
     _preview.imageScaling = NSImageScaleProportionallyUpOrDown;
+    NSClickGestureRecognizer *tap = [[NSClickGestureRecognizer alloc] initWithTarget:self action:@selector(toggleBottomBar:)];
+    [_preview addGestureRecognizer:tap];
+
+    NSVisualEffectView *statusPill = [[NSVisualEffectView alloc] init];
+    statusPill.material = NSVisualEffectMaterialHUDWindow;
+    statusPill.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    statusPill.state = NSVisualEffectStateActive;
+    statusPill.wantsLayer = YES; statusPill.layer.cornerRadius = 13; statusPill.layer.masksToBounds = YES;
     _status = [NSTextField labelWithString:@"Opening camera…"];
+    _status.font = [NSFont systemFontOfSize:11];
+    _status.textColor = [NSColor whiteColor];
+    _status.translatesAutoresizingMaskIntoConstraints = NO;
+    [statusPill addSubview:_status];
+
+    _genderSwitch = [NSSegmentedControl segmentedControlWithLabels:@[@"女生", @"男生"] trackingMode:NSSegmentSwitchTrackingSelectOne target:self action:@selector(switchGender:)];
+    _genderSwitch.selectedSegment = 0;
+    _genderSwitch.controlSize = NSControlSizeSmall;
+    _genderSwitch.accessibilityLabel = @"男女预设切换";
+
+    _toggleBarBtn = [NSButton buttonWithTitle:@"收起 ↓" target:self action:@selector(toggleBottomBar:)];
+    _toggleBarBtn.bezelStyle = NSBezelStyleInline;
+    _toggleBarBtn.controlSize = NSControlSizeSmall;
+
+    _compareBtn = [NSButton buttonWithTitle:@"原图对比" target:self action:@selector(toggleOriginal:)];
+    _compareBtn.bezelStyle = NSBezelStyleInline;
+    _compareBtn.buttonType = NSButtonTypePushOnPushOff;
+    _compareBtn.controlSize = NSControlSizeSmall;
+
+    _bottomBar = [[NSVisualEffectView alloc] init];
+    _bottomBar.material = NSVisualEffectMaterialHUDWindow;
+    _bottomBar.blendingMode = NSVisualEffectBlendingModeWithinWindow;
+    _bottomBar.state = NSVisualEffectStateActive;
+    _bottomBar.wantsLayer = YES; _bottomBar.layer.cornerRadius = 16; _bottomBar.layer.masksToBounds = YES;
+
     _makeupPicker = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
-    [_makeupPicker addItemWithTitle:@"不使用妆容"];
+    _makeupPicker.controlSize = NSControlSizeSmall;
+    [_makeupPicker addItemWithTitle:@"无妆"];
     _makeupPicker.accessibilityLabel = @"妆容";
     _makeupPicker.target = self;
     _makeupPicker.action = @selector(selectMakeup:);
     _makeupPicker.enabled = NO;
     for (int i = 0; i < 6; ++i) _lipLevels[i] = 0.6f;
     _lipPicker = [[NSPopUpButton alloc] initWithFrame:NSZeroRect pullsDown:NO];
+    _lipPicker.controlSize = NSControlSizeSmall;
     [_lipPicker addItemsWithTitles:@[@"无口红", @"珊瑚色", @"西柚色", @"豆沙粉", @"元气橘", @"复古红"]];
     _lipPicker.target = self; _lipPicker.action = @selector(selectLipstick:); _lipPicker.accessibilityLabel = @"口红";
     _lipPicker.enabled = NO;
     _lipSlider = [NSSlider sliderWithValue:0.6 minValue:0 maxValue:1 target:self action:@selector(changeLipstick:)];
+    _lipSlider.controlSize = NSControlSizeSmall;
     _lipSlider.accessibilityLabel = @"口红强度"; _lipSlider.enabled = NO;
-    for (NSView *view in @[_preview, _status, _makeupPicker, _lipPicker, _lipSlider]) {
+
+    for (NSView *view in @[_makeupPicker, _lipPicker, _lipSlider, _compareBtn]) {
         view.translatesAutoresizingMaskIntoConstraints = NO;
-        [_window.contentView addSubview:view];
+        [_bottomBar addSubview:view];
     }
-    NSView *content = _window.contentView;
+    for (NSView *view in @[_preview, statusPill, _genderSwitch, _toggleBarBtn, _bottomBar]) {
+        view.translatesAutoresizingMaskIntoConstraints = NO;
+        [content addSubview:view];
+    }
     [NSLayoutConstraint activateConstraints:@[
         [_preview.topAnchor constraintEqualToAnchor:content.topAnchor],
         [_preview.leadingAnchor constraintEqualToAnchor:content.leadingAnchor],
         [_preview.trailingAnchor constraintEqualToAnchor:content.trailingAnchor],
-        [_preview.bottomAnchor constraintEqualToAnchor:_status.topAnchor constant:-8],
-        [_status.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:12],
-        [_status.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-12],
-        [_status.trailingAnchor constraintLessThanOrEqualToAnchor:_makeupPicker.leadingAnchor constant:-8],
-        [_lipPicker.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-12],
-        [_lipPicker.bottomAnchor constraintEqualToAnchor:_makeupPicker.topAnchor constant:-4],
-        [_lipSlider.trailingAnchor constraintEqualToAnchor:_lipPicker.leadingAnchor constant:-8],
-        [_lipSlider.centerYAnchor constraintEqualToAnchor:_lipPicker.centerYAnchor],
-        [_lipSlider.widthAnchor constraintEqualToConstant:120],
-        [_makeupPicker.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-12],
-        [_makeupPicker.centerYAnchor constraintEqualToAnchor:_status.centerYAnchor]
+        [_preview.bottomAnchor constraintEqualToAnchor:content.bottomAnchor],
+
+        [statusPill.topAnchor constraintEqualToAnchor:content.topAnchor constant:12],
+        [statusPill.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:12],
+        [_status.topAnchor constraintEqualToAnchor:statusPill.topAnchor constant:5],
+        [_status.bottomAnchor constraintEqualToAnchor:statusPill.bottomAnchor constant:-5],
+        [_status.leadingAnchor constraintEqualToAnchor:statusPill.leadingAnchor constant:10],
+        [_status.trailingAnchor constraintEqualToAnchor:statusPill.trailingAnchor constant:-10],
+
+        [_genderSwitch.topAnchor constraintEqualToAnchor:content.topAnchor constant:12],
+        [_genderSwitch.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-12],
+
+        [_toggleBarBtn.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-14],
+        [_toggleBarBtn.bottomAnchor constraintEqualToAnchor:_bottomBar.topAnchor constant:-6],
+
+        [_bottomBar.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:12],
+        [_bottomBar.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-12],
+        [_bottomBar.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-10],
+        [_bottomBar.heightAnchor constraintEqualToConstant:40],
+
+        [_makeupPicker.leadingAnchor constraintEqualToAnchor:_bottomBar.leadingAnchor constant:12],
+        [_makeupPicker.centerYAnchor constraintEqualToAnchor:_bottomBar.centerYAnchor],
+        [_lipPicker.leadingAnchor constraintEqualToAnchor:_makeupPicker.trailingAnchor constant:10],
+        [_lipPicker.centerYAnchor constraintEqualToAnchor:_bottomBar.centerYAnchor],
+        [_lipSlider.leadingAnchor constraintEqualToAnchor:_lipPicker.trailingAnchor constant:8],
+        [_lipSlider.centerYAnchor constraintEqualToAnchor:_bottomBar.centerYAnchor],
+        [_lipSlider.widthAnchor constraintEqualToConstant:110],
+        [_compareBtn.trailingAnchor constraintEqualToAnchor:_bottomBar.trailingAnchor constant:-12],
+        [_compareBtn.centerYAnchor constraintEqualToAnchor:_bottomBar.centerYAnchor]
     ]];
     [_window center];
     [_window makeKeyAndOrderFront:nil];
@@ -169,7 +270,7 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style, NSIn
             xm_desktop_options options = {sizeof(options), assets};
             if (xm_desktop_engine_create(&options, &self->_engine) == XM_OK) {
                 self->_engineReady = RegisterHostFilters(self->_engine, [NSString stringWithUTF8String:assets]) &&
-                    ApplyParameters(self->_engine, nil, 0, 0);
+                    ApplyParameters(self->_engine, NO, nil, 0, 0);
             } else {
                 NSLog(@"SnapBeauty engine: %s", xm_desktop_last_error(NULL));
             }
@@ -180,7 +281,8 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style, NSIn
         for (NSDictionary *style in styles) {
             if ([style[@"key"] isEqualToString:@"dawn"]) { dawn = style; break; }
         }
-        if (dawn) self->_engineReady = ApplyParameters(self->_engine, dawn, 0, 0);
+        self->_dawnStyle = dawn;
+        if (dawn) self->_engineReady = ApplyParameters(self->_engine, NO, dawn, 0, 0);
         dispatch_async(dispatch_get_main_queue(), ^{
             for (NSDictionary *style in styles) {
                 [self->_makeupPicker addItemWithTitle:style[@"name"]];
@@ -194,10 +296,38 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style, NSIn
     });
 }
 
+- (void)toggleBottomBar:(id)sender {
+    (void)sender;
+    _barCollapsed = !_barCollapsed;
+    _bottomBar.hidden = _barCollapsed;
+    _toggleBarBtn.title = _barCollapsed ? @"展开美颜 ↑" : @"收起 ↓";
+}
+
+- (void)toggleOriginal:(NSButton *)sender {
+    BOOL orig = sender.state == NSControlStateValueOn;
+    dispatch_async(_captureQueue, ^{ self->_showOriginal = orig; });
+}
+
+- (void)switchGender:(NSSegmentedControl *)sender {
+    _malePreset = sender.selectedSegment == 1;
+    if (_malePreset) {
+        [_makeupPicker selectItemAtIndex:0];
+        [_lipPicker selectItemAtIndex:1];
+        _lipLevels[1] = 0.26f;
+        _lipSlider.enabled = YES; _lipSlider.floatValue = 0.26f;
+    } else {
+        if (_dawnStyle) [_makeupPicker selectItemWithTitle:_dawnStyle[@"name"]];
+        [_lipPicker selectItemAtIndex:0];
+        _lipSlider.enabled = NO; _lipSlider.floatValue = 0.6f;
+    }
+    [self selectMakeup:_makeupPicker];
+}
+
 - (void)selectMakeup:(NSPopUpButton *)sender {
     NSDictionary *style = sender.selectedItem.representedObject;
     NSInteger lip = _lipPicker.indexOfSelectedItem; float strength = _lipLevels[lip];
-    dispatch_async(_captureQueue, ^{ self->_engineReady = ApplyParameters(self->_engine, style, lip, strength); });
+    BOOL male = _malePreset;
+    dispatch_async(_captureQueue, ^{ self->_engineReady = ApplyParameters(self->_engine, male, style, lip, strength); });
 }
 
 - (void)selectLipstick:(NSPopUpButton *)sender {
@@ -282,7 +412,7 @@ static BOOL ApplyParameters(xm_desktop_engine *engine, NSDictionary *style, NSIn
         int64_t timestamp = (int64_t)clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
         xm_desktop_frame frame = {sizeof(frame), input, (int32_t)width, (int32_t)height, (int32_t)stride,
                                   XM_PIXEL_BGRA8, timestamp, output.mutableBytes, (int32_t)(width * 4)};
-        BOOL processed = _engineReady && xm_desktop_process(_engine, &frame, NULL) == XM_OK;
+        BOOL processed = !_showOriginal && _engineReady && xm_desktop_process(_engine, &frame, NULL) == XM_OK;
         CFDataRef data = processed ? CFBridgingRetain(output) : CFDataCreate(NULL, input, (CFIndex)(stride * height));
         CGDataProviderRef provider = CGDataProviderCreateWithCFData(data);
         CGColorSpaceRef color = CGColorSpaceCreateDeviceRGB();
