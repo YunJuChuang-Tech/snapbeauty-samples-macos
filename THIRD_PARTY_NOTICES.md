@@ -2,7 +2,7 @@
 
 The sample source and original makeup artwork are provided under the repository's Apache 2.0 license. The SnapBeauty SDK, its models and its bundled engine resources are separately licensed. See the SDK package's `NOTICE` and `Licenses/` and the provider's terms for use and redistribution.
 
-Builds use the locally obtained SnapBeauty macOS SDK 1.3.5 distribution. The SDK archive, headers, binaries and engine resources are supplied separately. AppKit, AVFoundation, CoreMedia, CoreVideo and CoreGraphics come from the Apple platform SDK.
+Builds use the locally obtained SnapBeauty macOS SDK 1.3.6 distribution. The SDK archive, headers, binaries and engine resources are supplied separately. AppKit, AVFoundation, CoreMedia, CoreVideo and CoreGraphics come from the Apple platform SDK.
 
 ## 滤镜 LUT
 

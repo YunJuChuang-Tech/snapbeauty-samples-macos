@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey.svg)](#环境要求)
 
-本仓库提供 SnapBeauty SDK 1.3.5 的 macOS 接入示例。两个入口都使用公开的 `snapbeauty/desktop.h` C 接口。
+本仓库提供 SnapBeauty SDK 1.3.6 的 macOS 接入示例。两个入口都使用公开的 `snapbeauty/desktop.h` C 接口。
 
 | 示例 | 内容 |
 | --- | --- |
@@ -20,21 +20,21 @@
 
 ### 1. 解压 SDK
 
-从 SnapBeauty 官方渠道获取 `SnapBeauty-macOS-1.3.5.zip`。将文件放在 `~/Downloads/`，在仓库根目录执行以下命令。也可解压至任意目录，并通过构建的第一个参数或 `SNAPBEAUTY_SDK_ROOT` 指定包含 `include/`、`lib/`、`Assets/`、`Shaders/` 的目录。
+从 SnapBeauty 官方渠道获取 `SnapBeauty-macOS-1.3.6.zip`。将文件放在 `~/Downloads/`，在仓库根目录执行以下命令。也可解压至任意目录，并通过构建的第一个参数或 `SNAPBEAUTY_SDK_ROOT` 指定包含 `include/`、`lib/`、`Assets/`、`Shaders/` 的目录。
 
 ```bash
 mkdir -p .local/sdk
-shasum -a 256 "$HOME/Downloads/SnapBeauty-macOS-1.3.5.zip"
-unzip "$HOME/Downloads/SnapBeauty-macOS-1.3.5.zip" -d .local/sdk
+shasum -a 256 "$HOME/Downloads/SnapBeauty-macOS-1.3.6.zip"
+unzip "$HOME/Downloads/SnapBeauty-macOS-1.3.6.zip" -d .local/sdk
 ```
 
-本示例对应 [SDK 1.3.5 ZIP](https://github.com/YunJuChuang-Tech/snapbeauty-macos-sdk/releases/download/1.3.5/SnapBeauty-macOS-1.3.5.zip)，SHA-256：`b78256a819246ecf2d52008a84d4ffa9743fb862e11bf501d3cbd15c6e9f1059`。
+本示例对应 [SDK 1.3.6 ZIP](https://github.com/YunJuChuang-Tech/snapbeauty-macos-sdk/releases/download/1.3.6/SnapBeauty-macOS-1.3.6.zip)，SHA-256：`b78256a819246ecf2d52008a84d4ffa9743fb862e11bf501d3cbd15c6e9f1059`。
 
 ### 2. 构建
 
 ```bash
 export SNAPBEAUTY_BUNDLE_ID=ai.snapbeauty.samples.macos
-bash macos/build.sh .local/sdk/SnapBeauty-macOS-1.3.5 build/macos
+bash macos/build.sh .local/sdk/SnapBeauty-macOS-1.3.6 build/macos
 ```
 
 输出 `build/macos/SnapBeautyCamera.app` 和 `build/macos/snapbeauty-minimal`。重复构建时指定新的输出目录。脚本把 SDK 动态库放入 `Contents/Frameworks`，用 `@executable_path/../Frameworks` 加载；`Assets/` 和 `Shaders/` 一起放入 `Contents/Resources`。默认使用本地 ad hoc 签名组装示例 App。
@@ -57,7 +57,7 @@ macOS 授权需与移动端分开签发。使用自有 Bundle ID 时，在构建
 
 ```bash
 SNAPBEAUTY_LICENSE_FILE="$PWD/macos/SampleLicense/snapbeauty.license" \
-  SNAPBEAUTY_ASSETS="$PWD/.local/sdk/SnapBeauty-macOS-1.3.5/Assets" build/macos/snapbeauty-minimal
+  SNAPBEAUTY_ASSETS="$PWD/.local/sdk/SnapBeauty-macOS-1.3.6/Assets" build/macos/snapbeauty-minimal
 ```
 
 `xm_desktop_init` 的状态 JSON 中 `code=0` 表示授权有效，`code=2` 表示缺少授权。没有有效授权时，SDK 返回原帧。相机程序使用单调时钟，给 SDK 提供采集缓冲区的实际步幅，并在销毁引擎前停止采集。
